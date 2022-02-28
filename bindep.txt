@@ -7,10 +7,21 @@ libyaml-dev [test platform:dpkg]
 python3-devel [test platform:rpm]
 python3 [test platform:rpm]
 
+# ansible-pylibssh
+gcc [compile test platform:rpm]
+libssh-devel [compile test platform:rpm]
+python3-Cython [test platform:fedora-35]
+python38-Cython [compile platform:centos-8 platform:rhel-8]
+
 # ncclient
-python38-six [platform:centos-8]
+python38-six [platform:centos-8 platform:rhel-8]
+python38-lxml [platform:centos-8 platform:rhel-8]
 
 # paramiko
-python38-cffi [platform:centos-8]
-python38-cryptography [platform:centos-8]
-python38-pycparser [platform:centos-8]
+findutils [compile platform:centos-8 platform:rhel-8]
+gcc [compile platform:centos-8 platform:rhel-8]
+make [compile platform:centos-8 platform:rhel-8]
+python38-devel [compile platform:centos-8 platform:rhel-8]
+python38-cffi [platform:centos-8 platform:rhel-8]
+python38-cryptography [platform:centos-8 platform:rhel-8]
+python38-pycparser [platform:centos-8 platform:rhel-8]

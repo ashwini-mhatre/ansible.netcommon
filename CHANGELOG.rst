@@ -5,6 +5,94 @@ Ansible Netcommon Collection Release Notes
 .. contents:: Topics
 
 
+v2.5.0
+======
+
+Minor Changes
+-------------
+
+- Copied the cliconf, httpapi, netconf, and terminal base plugins and NetworkConnectionBase into netcommon. These base plugins may now be imported from netcommmon instead of ansible if a collection depends on netcommon versions newer than this version, allowing features and bugfixes to flow to those collections without upgrading ansible.
+- Make ansible_network_os as optional param for httpapi connection plugin.
+- Support removal of non-config lines from running config while taking backup.
+- `network_cli` - added new option 'become_errors' to determine how privilege escalation failures are handled.
+
+Bugfixes
+--------
+
+- network_cli - Provide clearer error message when a prompt regex fails to compile
+- network_cli - fix issue when multiple terminal_initial_(prompt|answer) values are given (https://github.com/ansible-collections/ansible.netcommon/issues/331).
+
+v2.4.0
+======
+
+Minor Changes
+-------------
+
+- Add network_resource plugin to manage and provide single entry point for all resource modules for higher oder roles.
+
+Deprecated Features
+-------------------
+
+- network_cli - The paramiko_ssh setting ``look_for_keys`` was set automatically based on the values of the ``password`` and ``private_key_file`` options passed to network_cli. This option can now be set explicitly, and the automatic setting of ``look_for_keys`` will be removed after 2024-01-01  (https://github.com/ansible-collections/ansible.netcommon/pull/271).
+
+Bugfixes
+--------
+
+- network_cli - Add ability to set options inherited from paramiko/libssh in ansible >= 2.11 (https://github.com/ansible-collections/ansible.netcommon/pull/271).
+
+New Modules
+-----------
+
+- network_resource - Manage resource modules
+
+v2.3.0
+======
+
+Minor Changes
+-------------
+
+- Add vlan_expander filter
+- Persistent connection options (persistent_command_timeout, persistent_log_messages, etc.) have been unified across all persistent connections. New persistent connections may also now get these options by extending the connection_persistent documentation fragment.
+
+v2.2.0
+======
+
+Minor Changes
+-------------
+
+- Add variable to control ProxyCommand with libssh connection.
+- NetworkTemplate and ResouceModule base classes have been moved under module_utils.network.common.rm_base. Stubs have been kept for backwards compatibility. These will be removed after 2023-01-01. Please update imports for existing modules that subclass them. The `cli_rm_builder <https://github.com/ansible-network/cli_rm_builder>`_ has been updated to use the new imports.
+
+Bugfixes
+--------
+
+- libssh - Fix fromatting of authenticity error message when not prompting for input (https://github.com/ansible-collections/ansible.netcommon/issues/283)
+- netconf - Fix connection with ncclient versions < 0.6.10
+- network_cli - Fix for execution failing when ansible_ssh_password is used to specify password (https://github.com/ansible-collections/ansible.netcommon/issues/288)
+
+v2.1.0
+======
+
+Minor Changes
+-------------
+
+- Add support for ProxyCommand with netconf connection.
+
+Bugfixes
+--------
+
+- Variables in play_context will now be updated for netconf connections on each task run.
+- fix SCP/SFTP when using network_cli with libssh
+
+v2.0.2
+======
+
+Bugfixes
+--------
+
+- Fix cli_parse issue with parsers in utils collection (https://github.com/ansible-collections/ansible.netcommon/pull/270)
+- Support single_user_mode with Ansible 2.9.
+
 v2.0.1
 ======
 

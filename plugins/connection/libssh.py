@@ -64,11 +64,15 @@ DOCUMENTATION = """
       proxy_command:
         default: ''
         description:
-            - Proxy information for running the connection via a jumphost
+            - Proxy information for running the connection via a jumphost.
             - Also this plugin will scan 'ssh_args', 'ssh_extra_args' and 'ssh_common_args' from the 'ssh' plugin settings for proxy information if set.
-        env: [{name: ANSIBLE_LIBSSH_PROXY_COMMAND}]
+        env:
+          - name: ANSIBLE_LIBSSH_PROXY_COMMAND
         ini:
           - {key: proxy_command, section: libssh_connection}
+        vars:
+          - name: ansible_paramiko_proxy_command
+          - name: ansible_libssh_proxy_command
       pty:
         default: True
         description: 'TODO: write it'
@@ -180,7 +184,8 @@ class MyAddPolicy(object):
                 # don't print the prompt string since the user cannot respond
                 # to the question anyway
                 raise AnsibleError(
-                    AUTHENTICITY_MSG[1:92] % (hostname, key_type, fingerprint)
+                    AUTHENTICITY_MSG.rsplit("\n", 2)[0]
+                    % (hostname, message, key_type, fingerprint)
                 )
 
             self.connection.connection_lock()

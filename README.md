@@ -70,6 +70,7 @@ ansible.netcommon.parse_cli|ansible.netcommon parse_cli filter plugin
 ansible.netcommon.parse_cli_textfsm|ansible.netcommon parse_cli_textfsm filter plugin
 ansible.netcommon.parse_xml|ansible.netcommon parse_xml filter plugin
 ansible.netcommon.type5_pw|ansible.netcommon type5_pw filter plugin
+ansible.netcommon.vlan_expander|ansible.netcommon vlan_expander filter plugin
 ansible.netcommon.vlan_parser|Input: Unsorted list of vlan integers
 
 ### Httpapi plugins
@@ -107,6 +108,7 @@ Name | Description
 [ansible.netcommon.netconf_config](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.netconf_config_module.rst)|netconf device configuration
 [ansible.netcommon.netconf_get](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.netconf_get_module.rst)|Fetch configuration/state data from NETCONF enabled network devices.
 [ansible.netcommon.netconf_rpc](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.netconf_rpc_module.rst)|Execute operations on NETCONF enabled network devices.
+[ansible.netcommon.network_resource](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.network_resource_module.rst)|Manage resource modules
 [ansible.netcommon.restconf_config](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.restconf_config_module.rst)|Handles create, update, read and delete of configuration data on RESTCONF enabled devices.
 [ansible.netcommon.restconf_get](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.restconf_get_module.rst)|Fetch configuration/state data from RESTCONF enabled devices.
 [ansible.netcommon.telnet](https://github.com/ansible-collections/ansible.netcommon/blob/main/docs/ansible.netcommon.telnet_module.rst)|Executes a low-down and dirty telnet command
@@ -146,7 +148,7 @@ We welcome community contributions to this collection. If you find problems, ple
 
 You can also join us on:
 
-- Freenode IRC - ``#ansible-network`` Freenode channel
+- IRC - ``#ansible-network`` [irc.libera.chat](https://libera.chat/) channel
 - Slack - https://ansiblenetwork.slack.com
 
 See the [Ansible Community Guide](https://docs.ansible.com/ansible/latest/community/index.html) for details on contributing to Ansible.

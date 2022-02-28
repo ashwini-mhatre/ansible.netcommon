@@ -17,6 +17,8 @@ description:
 version_added: 1.0.0
 requirements:
 - ansible-pylibssh if using I(ssh_type=libssh)
+extends_documentation_fragment:
+- ansible.netcommon.connection_persistent
 options:
   host:
     description:
@@ -94,6 +96,18 @@ options:
     - name: ANSIBLE_BECOME
     vars:
     - name: ansible_become
+  become_errors:
+    type: str
+    description:
+    - This option determines how privilege escalation failures are handled when
+      I(become) is enabled.
+    - When set to C(ignore), the errors are silently ignored.
+      When set to C(warn), a warning message is displayed.
+      The default option C(fail), triggers a failure and halts execution.
+    vars:
+    - name: ansible_network_become_errors
+    default: fail
+    choices: ["ignore", "warn", "fail"]
   become_method:
     description:
     - This option allows the become method to be specified in for handling privilege
@@ -140,34 +154,6 @@ options:
       key: host_key_auto_add
     env:
     - name: ANSIBLE_HOST_KEY_AUTO_ADD
-  persistent_connect_timeout:
-    type: int
-    description:
-    - Configures, in seconds, the amount of time to wait when trying to initially
-      establish a persistent connection.  If this value expires before the connection
-      to the remote device is completed, the connection will fail.
-    default: 30
-    ini:
-    - section: persistent_connection
-      key: connect_timeout
-    env:
-    - name: ANSIBLE_PERSISTENT_CONNECT_TIMEOUT
-    vars:
-    - name: ansible_connect_timeout
-  persistent_command_timeout:
-    type: int
-    description:
-    - Configures, in seconds, the amount of time to wait for a command to return from
-      the remote device.  If this timer is exceeded before the command returns, the
-      connection plugin will raise an exception and close.
-    default: 30
-    ini:
-    - section: persistent_connection
-      key: command_timeout
-    env:
-    - name: ANSIBLE_PERSISTENT_COMMAND_TIMEOUT
-    vars:
-    - name: ansible_command_timeout
   persistent_buffer_read_timeout:
     type: float
     description:
@@ -183,23 +169,6 @@ options:
     - name: ANSIBLE_PERSISTENT_BUFFER_READ_TIMEOUT
     vars:
     - name: ansible_buffer_read_timeout
-  persistent_log_messages:
-    type: boolean
-    description:
-    - This flag will enable logging the command executed and response received from
-      target device in the ansible log file. For this option to work 'log_path' ansible
-      configuration option is required to be set to a file path with write access.
-    - Be sure to fully understand the security implications of enabling this option
-      as it could create a security vulnerability by logging sensitive information
-      in log file.
-    default: false
-    ini:
-    - section: persistent_connection
-      key: log_messages
-    env:
-    - name: ANSIBLE_PERSISTENT_LOG_MESSAGES
-    vars:
-    - name: ansible_persistent_log_messages
   terminal_stdout_re:
     type: list
     elements: dict
@@ -335,18 +304,20 @@ from ansible.errors import AnsibleConnectionFailure, AnsibleError
 from ansible.module_utils.basic import missing_required_lib
 from ansible.module_utils.six import PY3
 from ansible.module_utils.six.moves import cPickle
-from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.utils import (
-    to_list,
-)
 from ansible.module_utils._text import to_bytes, to_text
 from ansible.playbook.play_context import PlayContext
-from ansible.plugins.connection import NetworkConnectionBase
 from ansible.plugins.loader import (
     cliconf_loader,
     terminal_loader,
     connection_loader,
 )
 from ansible.plugins.loader import cache_loader
+from ansible_collections.ansible.netcommon.plugins.module_utils.network.common.utils import (
+    to_list,
+)
+from ansible_collections.ansible.netcommon.plugins.plugin_utils.connection_base import (
+    NetworkConnectionBase,
+)
 
 try:
     from scp import SCPClient
@@ -458,15 +429,6 @@ class Connection(NetworkConnectionBase):
             self._ssh_type_conn = connection_loader.get(
                 self._ssh_type, self._play_context, "/dev/null"
             )
-            self._ssh_type_conn.set_options(
-                direct={
-                    "look_for_keys": not bool(
-                        self._play_context.password
-                        and not self._play_context.private_key_file
-                    ),
-                    "host_key_checking": self.get_option("host_key_checking"),
-                }
-            )
             self.queue_message(
                 "vvvv", "ssh type is set to %s" % self.get_option("ssh_type")
             )
@@ -521,6 +483,44 @@ class Connection(NetworkConnectionBase):
         else:
             return super(Connection, self).exec_command(cmd, in_data, sudoable)
 
+    def get_options(self, hostvars=None):
+        options = super(Connection, self).get_options(hostvars=hostvars)
+        options.update(self.ssh_type_conn.get_options(hostvars=hostvars))
+        return options
+
+    def set_options(self, task_keys=None, var_options=None, direct=None):
+        super(Connection, self).set_options(
+            task_keys=task_keys, var_options=var_options, direct=direct
+        )
+        self.ssh_type_conn.set_options(
+            task_keys=task_keys, var_options=var_options, direct=direct
+        )
+        # Retain old look_for_keys behaviour, but only if not set
+        if not any(
+            [
+                task_keys and ("look_for_keys" in task_keys),
+                var_options and ("look_for_keys" in var_options),
+                direct and ("look_for_keys" in direct),
+            ]
+        ):
+            look_for_keys = not bool(
+                self.get_option("password")
+                and not self.get_option("private_key_file")
+            )
+            if not look_for_keys:
+                # This actually can't be overridden yet without changes in ansible-core
+                # TODO: Uncomment when appropriate
+                # self.queue_message(
+                #     "warning",
+                #     "Option look_for_keys has been implicitly set to {0} because "
+                #     "it was not set explicitly. This is retained to maintain "
+                #     "backwards compatibility with the old behavior. This behavior "
+                #     "will be removed in some release after 2024-01-01".format(
+                #         look_for_keys
+                #     ),
+                # )
+                self.ssh_type_conn.set_option("look_for_keys", look_for_keys)
+
     def update_play_context(self, pc_data):
         """Updates the play context information for the connection"""
         pc_data = to_bytes(pc_data)
@@ -535,7 +535,7 @@ class Connection(NetworkConnectionBase):
         if self._play_context.become ^ play_context.become:
             if play_context.become is True:
                 auth_pass = play_context.become_pass
-                self._terminal.on_become(passwd=auth_pass)
+                self._on_become(become_pass=auth_pass)
                 self.queue_message("vvvv", "authorizing connection")
             else:
                 self._terminal.on_unbecome()
@@ -648,8 +648,8 @@ class Connection(NetworkConnectionBase):
             )
 
             self.receive(
-                prompts=to_bytes(terminal_initial_prompt),
-                answer=to_bytes(terminal_initial_answer),
+                prompts=terminal_initial_prompt,
+                answer=terminal_initial_answer,
                 newline=newline,
                 check_all=check_all,
             )
@@ -657,7 +657,7 @@ class Connection(NetworkConnectionBase):
             if self._play_context.become:
                 self.queue_message("vvvv", "firing event: on_become")
                 auth_pass = self._play_context.become_pass
-                self._terminal.on_become(passwd=auth_pass)
+                self._on_become(become_pass=auth_pass)
 
             self.queue_message("vvvv", "firing event: on_open_shell()")
             self._terminal.on_open_shell()
@@ -667,6 +667,24 @@ class Connection(NetworkConnectionBase):
             )
 
         return self
+
+    def _on_become(self, become_pass=None):
+        """
+        Wraps terminal.on_become() to handle
+        privilege escalation failures based on user preference
+        """
+        on_become_error = self.get_option("become_errors")
+        try:
+            self._terminal.on_become(passwd=become_pass)
+        except AnsibleConnectionFailure:
+            if on_become_error == "ignore":
+                pass
+            elif on_become_error == "warn":
+                self.queue_message(
+                    "warning", "on_become: privilege escalation failed"
+                )
+            else:
+                raise
 
     def close(self):
         """
@@ -1053,7 +1071,13 @@ class Connection(NetworkConnectionBase):
             single_prompt = True
         if not isinstance(answer, list):
             answer = [answer]
-        prompts_regex = [re.compile(to_bytes(r), re.I) for r in prompts]
+        try:
+            prompts_regex = [re.compile(to_bytes(r), re.I) for r in prompts]
+        except re.error as exc:
+            raise ConnectionError(
+                "Failed to compile one or more terminal prompt regexes: %s.\n"
+                "Prompts provided: %s" % (to_text(exc), prompts)
+            )
         for index, regex in enumerate(prompts_regex):
             match = regex.search(resp)
             if match:
@@ -1065,13 +1089,12 @@ class Connection(NetworkConnectionBase):
                 # if prompt_retry_check is enabled to check if same prompt is
                 # repeated don't send answer again.
                 if not prompt_retry_check:
-                    prompt_answer = (
+                    prompt_answer = to_bytes(
                         answer[index] if len(answer) > index else answer[0]
                     )
-                    self._ssh_shell.sendall(b"%s" % prompt_answer)
                     if newline:
-                        self._ssh_shell.sendall(b"\r")
                         prompt_answer += b"\r"
+                    self._ssh_shell.sendall(prompt_answer)
                     self._log_messages(
                         "matched command prompt answer: %s" % prompt_answer
                     )
@@ -1188,10 +1211,11 @@ class Connection(NetworkConnectionBase):
                         remote host before triggering timeout exception
         :return: None
         """
+        ssh_type = self.get_option("ssh_type")
         ssh = self.ssh_type_conn._connect_uncached()
-        if self._ssh_type == "libssh":
-            ssh.put_file(source, destination, proto=proto)
-        elif self._ssh_type == "paramiko":
+        if ssh_type == "libssh":
+            self.ssh_type_conn.put_file(source, destination, proto=proto)
+        elif ssh_type == "paramiko":
             if proto == "scp":
                 if not HAS_SCP:
                     raise AnsibleError(missing_required_lib("scp"))
@@ -1209,7 +1233,7 @@ class Connection(NetworkConnectionBase):
                 )
         else:
             raise AnsibleError(
-                "Do not know how to do SCP with ssh_type %s" % self._ssh_type
+                "Do not know how to do SCP with ssh_type %s" % ssh_type
             )
 
     def get_file(self, source=None, destination=None, proto="scp", timeout=30):
@@ -1223,10 +1247,11 @@ class Connection(NetworkConnectionBase):
         :return: None
         """
         """Fetch file over scp/sftp from remote device"""
+        ssh_type = self.get_option("ssh_type")
         ssh = self.ssh_type_conn._connect_uncached()
-        if self._ssh_type == "libssh":
-            ssh.fetch_file(source, destination, proto=proto)
-        elif self._ssh_type == "paramiko":
+        if ssh_type == "libssh":
+            self.ssh_type_conn.fetch_file(source, destination, proto=proto)
+        elif ssh_type == "paramiko":
             if proto == "scp":
                 if not HAS_SCP:
                     raise AnsibleError(missing_required_lib("scp"))
@@ -1248,7 +1273,7 @@ class Connection(NetworkConnectionBase):
                 )
         else:
             raise AnsibleError(
-                "Do not know how to do SCP with ssh_type %s" % self._ssh_type
+                "Do not know how to do SCP with ssh_type %s" % ssh_type
             )
 
     def get_cache(self):
@@ -1287,8 +1312,12 @@ class Connection(NetworkConnectionBase):
         """
         invalidate = False
         cfg_cmds = []
-        if self.cliconf.has_option("config_commands"):
+        try:
+            # AnsiblePlugin base class in Ansible 2.9 does not have has_option() method.
+            # TO-DO: use has_option() when we drop 2.9 support.
             cfg_cmds = self.cliconf.get_option("config_commands")
+        except AttributeError:
+            cfg_cmds = []
         if (self._is_in_config_mode()) or (to_text(command) in cfg_cmds):
             invalidate = True
         return invalidate
